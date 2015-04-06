@@ -1,0 +1,4 @@
+reference/
+*.swp
+bin/
+../bin

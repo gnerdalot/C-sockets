@@ -1,0 +1,12 @@
+FIX
+* dg_cmd: send to 208.73.23.100:56451 3 bytes - wrong
+* oversize packets freeze the server.  break into multiple...
+
+
+
+FEATURES
+* Add HUP handlers
+* Logging
+* epoch time
+* security - md5 + seed date +%Y-%m-%d:%H%M | md5
+
