@@ -12,6 +12,7 @@
 #define MAXLINE  2048 
 #define MAXLINES 8192
 #define MAXMESG 600
+#define MAXLOGMESG 512
 
 // https://en.wikipedia.org/wiki/External_variable
 extern int verbose;
@@ -40,6 +41,8 @@ typedef struct infile_t {
 
 
 // begin DECL 
+void die(const char *msg);
+void log2stderr(char *mesg);
 int runCmd(struct runcmd_t *cmd);
 int getStream(struct infile_t *infile, FILE * stream);
 int getFile(struct infile_t * dst, char * filename);
@@ -53,6 +56,35 @@ int split(char ** dst, char * array, int size, char * splitstr);
 // http://www.tenouk.com/ModuleZ.html
 
 
+// perl die
+void die(const char *msg)
+{
+	perror(msg);
+	exit(EXIT_FAILURE);
+}
+
+/*
+ * Log with time
+ */
+void log2stderr(char * mesg)
+{
+	struct timeval tim;
+	double t_start;
+
+	// overflow protection
+	mesg[MAXLOGMESG - 1] = 0;
+
+	gettimeofday(&tim, NULL); // time_t tv_sec, suseconds_t tv_usec
+	t_start  = tim.tv_sec + tim.tv_usec/1000000.0;
+
+	fprintf(stderr, "%.4f %s", t_start, mesg);
+
+	// reset
+	mesg[0] = 0;
+
+}
+
+
 // get a stream
 int getStream(struct infile_t *infile, FILE * stream)
 {
@@ -64,12 +96,16 @@ int getStream(struct infile_t *infile, FILE * stream)
 	// first zero out
 	memset(buff, 0, MAXLINE);
 
-	if (verbose) printf("Function %s  File: %s\n", __func__, infile->filename );
+	if (verbose >= 2) {
+		fprintf(stderr, "Function %s  File: %s\n", __func__, infile->filename );
+	}
 	// read in output and store in array of pointers
 
 	while (fgets(buff, MAXLINE - 1, stream) != NULL) {
 		
-		if (verbose >= 2) printf("%s line %d read: %s", __func__, i, buff);
+		if (verbose >= 2) {
+			fprintf(stderr, "%s line %d read: %s", __func__, i, buff);
+		}
 
 		if (realtime) printf("%s", buff);
 
@@ -81,11 +117,15 @@ int getStream(struct infile_t *infile, FILE * stream)
 			
 		infile->lines[i] = calloc(1, sizeof(buff));
 		infile->numchars += n; // dont like this - counts chars past \0
-		if (verbose >= 2) printf("buffer had %ldchars\n", strlen(buff));
+		if (verbose >= 2) {
+			fprintf(stderr, "buffer had %ldchars\n", strlen(buff));
+		}
 
 		memcpy(infile->lines[i], buff, sizeof(buff));
 
-		if (verbose >=2) printf("%s line %d %s copied to lines[%d]: %s\n", __func__, i, buff, i, infile->lines[i]);
+		if (verbose >=2) {
+			fprintf(stderr, "%s line %d %s copied to lines[%d]: %s\n", __func__, i, buff, i, infile->lines[i]);
+		}
 
 		i++;
 
@@ -93,7 +133,10 @@ int getStream(struct infile_t *infile, FILE * stream)
 		memset(buff, 0, MAXLINE);
 
 	}
-	if (verbose) printf("%s: read in %d lines\n", __func__, i);
+
+	if (verbose >= 2) {
+		fprintf(stderr, "%s: read in %d lines\n", __func__, i);
+	}
 
 	// C does not track array sizes, so we have to
 	infile->numlines = i;
@@ -108,7 +151,9 @@ int getFile(struct infile_t * dst, char * filename)
 	int res;
 	FILE *in = fopen(filename, "r");
 
-	if (verbose) printf("%s: %s\n", __func__, filename);
+	if (verbose >= 2) {
+		fprintf(stderr, "%s: %s\n", __func__, filename);
+	}
 
 	// read the stream and return the exit code
 	res = getStream(dst, in);
@@ -132,6 +177,8 @@ int runCmd(struct runcmd_t *cmd)
 	//int j = 0;
 	int rc = 0;
 	struct infile_t output = { .numlines = 0 };
+	char * logmesg;
+	logmesg = calloc(1, sizeof(char[MAXLOGMESG]));
 
 	// init - causes segfault with runcmd
 	/*
@@ -141,10 +188,14 @@ int runCmd(struct runcmd_t *cmd)
 	*/	
 
 	// c99 introduced this
-	if (cmd->verbose > 0) printf("Function: %s  command: %s\n", __func__, cmd->command );
+	if (cmd->verbose > 0) {
+		fprintf(stderr, "Function: %s  command: %s\n", __func__, cmd->command );
+	}
 
 	if (strlen(cmd->command) < 1) {
-		fprintf(stderr, "%s passed zero-length command\n", __func__);
+		sprintf(logmesg, "%s passed zero-length command\n", __func__);
+		log2stderr(logmesg);
+		free(logmesg);
 		return 1;
 	}
 
@@ -156,16 +207,19 @@ int runCmd(struct runcmd_t *cmd)
 	}
 
 	// read in the stream
-	if (verbose) printf("%s Get input stream%s\n", __func__, cmd->command );
+	if (verbose >= 2) {
+		fprintf(stderr, "%s Get input stream%s\n", __func__, cmd->command );
+	}
 	rc = getStream(&output, in);
 
 	// copy the results into our struct
 	for (i = 0; i < output.numlines; i++) {
-		if (verbose >= 2) printf("line %d: %s\n", i, output.lines[i]);
+		if (verbose >= 2) {
+			fprintf(stderr, "line %d: %s\n", i, output.lines[i]);
+		}
 		strncat(cmd->out[i], output.lines[i], MAXLINE);
 		free(output.lines[i]);
 	}
-	// if (verbose) printf("%s out \"%s\"\n", __func__, cmd->out[0]);
 
 	cmd->numlines = output.numlines;
 	cmd->numchars = output.numchars;
@@ -184,8 +238,18 @@ int runCmd(struct runcmd_t *cmd)
 		}
 	}
 	chomp(cmd->outline, MAXLINE);
+	chomp(cmd->command, MAXLINE);
 
-	if (verbose) printf("%s %s \n%s\nexit %d\n", __func__, cmd->command, cmd->outline, cmd->rc);
+	if (verbose == 1) {
+		sprintf(logmesg, "%s \"%s\" exit %d\n", __func__, cmd->command, cmd->rc);
+		log2stderr(logmesg);
+	}
+	else if (verbose > 1) {
+		sprintf(logmesg, "%s \"%s\" exit %d\n%s", __func__, cmd->command, cmd->rc, cmd->outline);
+		log2stderr(logmesg);
+	}
+
+	free(logmesg);
 
 	return cmd->rc;
 
@@ -292,7 +356,9 @@ int grep(char ** dst, char ** array, int size, char * matchstr)
 		ptr = strstr(array[i], matchstr);
 
 		if ( ptr != NULL ) {
-			if (verbose >= 2) printf("%s %s has sub %s\n", __func__, array[i], matchstr);
+			if (verbose >= 2) {
+				fprintf(stderr, "%s %s has sub %s\n", __func__, array[i], matchstr);
+			}
 			dst[n] = calloc(1, sizeof(char[1024]));
 			// dst[0] <---------  array[3]
 			//     ...
@@ -333,7 +399,7 @@ int join(char * dst, char ** array, int array_len, char * joinstr, int max)
 int chomp(char * array, int size)
 {
 	int i;
-	for(i = size; i > 0; i--) {
+	for(i = 0; i < size; i++) {
 		if (strcmp(&(array[i]), "\n") == 0) {
 			array[i] = 0;
 			return i;

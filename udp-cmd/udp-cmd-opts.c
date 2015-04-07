@@ -109,8 +109,8 @@ void do_opts (int argc, char *argv[], char ** environ)
 
 			case 'v':
 				//printf("choice v %d\n", opt);
-				globalArgs.verbose = 1;
-				verbose = 1;
+				globalArgs.verbose++;
+				verbose++;
 				break;
 
 			case 'y':
@@ -136,7 +136,7 @@ void do_opts (int argc, char *argv[], char ** environ)
 	globalArgs.clients    = argv + optind;
 	globalArgs.numclients = argc - optind;
 
-	if (globalArgs.dryrun == 1 || globalArgs.verbose == 1) {
+	if (globalArgs.dryrun || globalArgs.verbose) {
 
 		printf("globalArgs.serverip           = %s\n", globalArgs.serverip);
 		printf("globalArgs.port               = %d\n", globalArgs.port);
@@ -149,7 +149,7 @@ void do_opts (int argc, char *argv[], char ** environ)
 		printf("globalArgs.match              = %s\n", globalArgs.match);
 		}
 
-		if (globalArgs.dryrun == 1) {
+		if (globalArgs.dryrun) {
 			exit(0);
 		}
 	}

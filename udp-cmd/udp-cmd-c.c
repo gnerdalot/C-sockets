@@ -42,7 +42,7 @@ int main(int argc, char *argv[], char ** environ) {
 			globalArgs.serverip, globalArgs.port);
 	}
 	else {
-		if (globalArgs.verbose == 1) {
+		if (globalArgs.verbose) {
 			printf("client: OK opened datagram socket to %s:%d\n",
 				globalArgs.serverip, globalArgs.port);
 		}
@@ -57,7 +57,7 @@ int main(int argc, char *argv[], char ** environ) {
 			printf("client: FAIL bind to %s:%d\n", globalArgs.serverip, globalArgs.port);
 	}
 	else {
-		if (globalArgs.verbose == 1) {
+		if (globalArgs.verbose) {
 			printf("client: OK bind to %s:%d\n", globalArgs.serverip, globalArgs.port);
 		}
 	}

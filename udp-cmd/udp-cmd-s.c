@@ -56,7 +56,7 @@ int main(int argc, char *argv[], char ** environ) {
 		exit(2);
 	}
 	else {
-		if (globalArgs.verbose == 1) {
+		if (globalArgs.verbose) {
 			fprintf(stderr, "server: OK bind to %s %d (%d)\n", 
 				ip, ntohs(serv_addr.sin_port), globalArgs.port);
 		}
