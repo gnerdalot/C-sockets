@@ -25,8 +25,8 @@ void usage (char * me, int rc)
 {
 	printf("%s - simple udp data transfer\n", me);
 	printf("Usage: %s [-c <client ip> | -s <server ip>] -p <port> -u <udp size> -m <message> [-v]\n", me);
-	printf("Example:\n  server %% unpudp-s -cp 9001\n  client %% unpudp-c -s 0.0.0.0 -p 9001\n\n");
-	printf("Example:\n  server %% unpudp-cmd-v2-s -cp 9001 -m cmd-\n  client %% unpudp-cmd-c -s 204.27.60.73 -p 9001\n\n");
+	printf("Example:\n  server %% udp-s -cp 9001\n  client %% udp-cmd-c -s 0.0.0.0 -p 9001\n\n");
+	printf("Example:\n  server %% udp-cmd-s -cp 9001 -m cmd-\n  client %% udp-cmd-c -s 204.27.60.73 -p 9001\n\n");
 	exit(rc);
 }
 

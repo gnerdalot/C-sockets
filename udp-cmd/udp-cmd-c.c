@@ -5,7 +5,7 @@
 #include <errno.h>
 
 // our libs
-#include "unpudp-cmd-v2-opts.c"
+#include "udp-cmd-opts.c"
 #include "../lib/unp-inet.h"
 #include "../lib/utils.h"
 

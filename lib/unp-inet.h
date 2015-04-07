@@ -24,6 +24,7 @@ extern int verbose, dryrun, realtime;
 void dg_echo(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen);
 void dg_cmd(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen, char ** clients, int * nclients);
 int registerClient(struct sockaddr *client_addr, char ** clients, int * nclients);
+void printClients(char ** clients, int * nclients);
 void dg_cli(FILE *fp, int sockfd, struct sockaddr *pserv_addr, socklen_t servlen);
 void die(const char *msg);
 
@@ -119,13 +120,17 @@ void dg_cmd(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen, char **
 			// register client - returns 1 if a new client
 			j = registerClient(pcli_addr, clients, nclients);
 
-			if (verbose >= 1) {
+			if (verbose) {
 				fprintf(stderr, "%s: %.6lf %s:%u recv %lu bytes\n", __func__, 
 					t_start,
 					inet_ntoa(((struct sockaddr_in *)pcli_addr)->sin_addr), 
 					((struct sockaddr_in *)pcli_addr)->sin_port, strlen(mesg));
-
 			}
+		}
+
+		if (verbose) {
+			fprintf(stderr, "Clients connected: %d\n", j);
+			printClients(clients, nclients);
 		}
 
 		// command setup and run
@@ -133,6 +138,8 @@ void dg_cmd(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen, char **
 		cmd.numlines = 0;
 		cmd.numchars = 0;
 		realtime = 0;
+
+		// run the command on the server
 		runCmd(&cmd);
 
 		// match as needed
@@ -156,7 +163,7 @@ void dg_cmd(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen, char **
 		// done with command, now send results back
 		// send back in pieces that are MAXMESG long until it is all sent back.
 
-		printf("lines: %d\n", n);
+		fprintf(stderr, "socket %d: lines: %d\n", sockfd, n);
 
 		// set nlines - not like perl...
 		sprintf(nlines, "%8d\n", n);
@@ -166,6 +173,7 @@ void dg_cmd(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen, char **
 		if (sendto(sockfd, nlines, 10, 0, pcli_addr, clilen) < 10) 
 			fprintf(stderr, "%s: sendto error:\n%s", __func__, nlines);
 
+		// now send the lines
 		for (i = 0; i < n; i++) {
 
 			if (sendto(sockfd, cmd.out[i], strlen(cmd.out[i]), 0, pcli_addr, clilen) 
@@ -185,8 +193,25 @@ void dg_cmd(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen, char **
 			}
 		}
 
+		// reset output else will get re-used.
+		for (i = 0; i < n; i++)
+			cmd.out[i][0] = 0; 
+
 	}
 
+}
+
+
+/*
+ * print out clients
+*/
+void printClients(char ** clients, int * nclients)
+{
+	int i;
+	for(i=0; i < *nclients; i++) {
+		// if use printf, will get select error on client side
+		fprintf(stderr, "Client %d/%d: %s\n", i + 1, *nclients, clients[i]);
+	}
 }
 
 
