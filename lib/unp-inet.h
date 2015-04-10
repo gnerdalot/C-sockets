@@ -153,7 +153,6 @@ void dg_cmd(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen, char **
 			exit(23);
 		}
 
-
 		// run the command on the server
 		runCmd(&cmd);
 		n = cmd.numlines;
@@ -162,16 +161,17 @@ void dg_cmd(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen, char **
 		// command setup and run
 		// send back in pieces that are MAXMESG long until it is all sent back.
 
-		if (verbose > 2) fprintf(stderr, "socket %d: lines: %d\n", sockfd, n);
+		if (verbose > 2) sprintf(logmesg, "\nsocket %d: lines: %d\n", sockfd, n);
 
 		// set nlines - not like perl... setting a zero-padded character string
-		sprintf(nlines, "%08d\n0", n);
+		sprintf(nlines, "%8d\n", n);
 
 		// first thing sent is the line count
-		//nlines[9] = 0; // null terminate because
+		nlines[9] = 0; // null terminate because
 
-		if (udp_send_mesg(sockfd, pcli_addr, maxclilen, cmd.out[i], n) < n)
+		if (udp_send_mesg(sockfd, pcli_addr, maxclilen, cmd.out, n) < n) {
 			fprintf(stderr, "%s: sendto error:\n%s", __func__, nlines);
+		}
 
 		// note end of command
 		chomp(cmd.command, MAXLINE);
@@ -183,8 +183,9 @@ void dg_cmd(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen, char **
 		log2stderr(logmesg);
 
 		// reset output else will get re-used (read: appended)
-		for (i = 0; i < n; i++)
-			cmd.out[i][0] = 0;
+		for (i = 0; i < n; i++) {
+			free(cmd.out[i]);
+		}
 
 	}
 	free(logmesg);

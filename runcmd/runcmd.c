@@ -22,17 +22,15 @@ int main(int argc, char *argv[], char ** environ) {
 	struct runcmd_t cmd = { 
 		.numlines = 0,
 		.rc = 0,
-		//.out[511][2047] = 0,
-		//.out[0][0] = 0,
 		.verbose = 0, 
-		.command = calloc(1, sizeof(char[1024]))
+		.command = calloc(1024, sizeof(char))
 	}; 
 
 	dryrun   = 0;
 	realtime = 0;
 
 	int i;
-	char * dst = calloc(1, sizeof(char[1024]));
+	char * dst = calloc(1024, sizeof(char));
 	char str = ' ';
 	char * joinstr = &str;
 

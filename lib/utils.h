@@ -25,8 +25,8 @@ typedef struct runcmd_t {
 	int numlines;          // no of lines in output
 	int numchars;          // no of chars in output
 	int verbose;           // verbosity 
-	char out[SOMELINES][MAXLINE];  // command output - arrays 
-	char outline[MAXLINE];  // command output - arrays 
+	char **out;            // command output - arrays 
+	char outline[MAXLINE]; // command output - string
 	int timestart;         // unix time of command start
 	int timend;            // unix time of command end
 	int timeout;           // program timeout
@@ -45,7 +45,7 @@ void die(const char *msg);
 void log2stderr(char *mesg);
 int runCmd(struct runcmd_t *cmd);
 int getStream(struct infile_t *infile, FILE * stream);
-int udp_send_mesg(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen, char * mesg, int n);
+int udp_send_mesg(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen, char ** mesg, int n);
 int getFile(struct infile_t * dst, char * filename);
 int chomp(char * array, int size);
 int achomp(char ** array, int size);
@@ -181,13 +181,6 @@ int runCmd(struct runcmd_t *cmd)
 	char * logmesg;
 	logmesg = calloc(MAXLOGMESG, sizeof(char));
 
-	// init - causes segfault with runcmd
-	/*
-	for(i = 0; i < SOMELINES; i++) 
-		for (j = 0; j < MAXLINES; j++) 
-			cmd->out[i][j] = 0;
-	*/	
-
 	// c99 introduced this
 	if (cmd->verbose > 0) {
 		fprintf(stderr, "Function: %s  command: %s\n", __func__, cmd->command );
@@ -214,17 +207,19 @@ int runCmd(struct runcmd_t *cmd)
 	rc = getStream(&output, in);
 
 	// copy the results into our struct
+	cmd->out = (char ** )malloc(output.numlines * sizeof(char[MAXLINE]));
 	for (i = 0; i < output.numlines; i++) {
 		if (verbose >= 2) {
 			fprintf(stderr, "line %d: %s\n", i, output.lines[i]);
 		}
-		strncat(cmd->out[i], output.lines[i], MAXLINE);
-		free(output.lines[i]);
+		cmd->out[i] = output.lines[i]; 
+		// , sizeof(char[MAXLINE]));
+		// strncat(cmd->out[i], output.lines[i], MAXLINE);
 	}
 
 	cmd->numlines = output.numlines;
 	cmd->numchars = output.numchars;
-	//achomp(cmd->out, output.numlines);
+	achomp(cmd->out, output.numlines);
 
 	// store exit code
 	cmd->rc = pclose(in);
@@ -258,8 +253,8 @@ int runCmd(struct runcmd_t *cmd)
 
 
 // Send a message via udp to one dest
-int udp_send_mesg(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen, char * mesg, int n)
-
+// mesg is array of arrays
+int udp_send_mesg(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen, char ** mesg, int n)
 {
 	int i = 0;
 	struct timeval tim;
@@ -267,11 +262,13 @@ int udp_send_mesg(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen, c
 	char * logmesg;
 	logmesg = calloc(MAXLOGMESG, sizeof(char));
 
+	sprintf(logmesg, "%s: send %d lines\n", __func__, n);
+
 	// send the lines
 	for (i = 0; i < n; i++) {
 
-		if (sendto(sockfd, mesg, strlen(mesg), 0, pcli_addr, maxclilen) < strlen(mesg)) {
-			sprintf(logmesg, "%s: sendto error:\n%s", __func__, mesg);
+		if (sendto(sockfd, mesg[i], strlen(mesg[i]), 0, pcli_addr, maxclilen) < strlen(mesg[i])) {
+			sprintf(logmesg, "%s: sendto error:\n%s", __func__, mesg[i]);
 		}
 		else {
 			if (verbose) {
@@ -282,7 +279,7 @@ int udp_send_mesg(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen, c
 					t_end,
 					inet_ntoa(((struct sockaddr_in *)pcli_addr)->sin_addr),
 					((struct sockaddr_in *)pcli_addr)->sin_port,
-					strlen(mesg)
+					strlen(mesg[i])
 				);
 				log2stderr(logmesg);
 			}
@@ -372,7 +369,6 @@ int split(char ** dst, char * line, int size, char * splitchar)
 	// incremented (n) but buffer has no results, drop it...
 	// would happen if split char was last chars on a line
 	if(j == 0) n--;
-
 
 	return n;
 
