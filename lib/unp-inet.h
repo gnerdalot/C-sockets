@@ -27,65 +27,6 @@ int registerClient(struct sockaddr *client_addr, char ** clients, int * nclients
 void printClients(char ** clients, int * nclients);
 void dg_cli(FILE *fp, int sockfd, struct sockaddr *pserv_addr, socklen_t servlen);
 
-/* read datagram form connectionless socket and write it back to the sender.
- * we never return, as we never know when the datagram client is done.
- * server side
- */
-
-
-void dg_echo(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen)
-{
-
-	int n;
-	socklen_t clilen;
-	char mesg[MAXMESG];
-
-	char * logmesg;
-	logmesg = calloc(MAXLOGMESG, sizeof(char));
-
-	for ( ; ; ) {
-
-		clilen = maxclilen;
-
-		// empty out
-		memset(&mesg, 0, sizeof mesg);
-
-		n = recvfrom(sockfd, mesg, MAXMESG, 0, pcli_addr, &clilen);
-
-		// recv packet
-		if (n < 0) {
-			sprintf(logmesg, "%s: recvfrom error\n", __func__);
-			log2stderr(logmesg);
-		}
-		else {
-			if (verbose) {
-				sprintf(logmesg, "START %s: %s:%u recv %lu bytes\n", __func__,
-					inet_ntoa(((struct sockaddr_in *)pcli_addr)->sin_addr),
-					((struct sockaddr_in *)pcli_addr)->sin_port, strlen(mesg));
-				log2stderr(logmesg);
-			}
-		}
-
-		// send packet
-		if (sendto(sockfd, mesg, n, 0, pcli_addr, clilen) != n) {
-			sprintf(logmesg, "%s: sendto error\n", __func__);
-			log2stderr(logmesg);
-		}
-		else {
-			if (verbose) {
-				sprintf(logmesg, "%s: send to %s:%u - %lu bytes\n", __func__,
-					inet_ntoa(((struct sockaddr_in *)pcli_addr)->sin_addr),
-					((struct sockaddr_in *)pcli_addr)->sin_port, strlen(mesg));
-				log2stderr(logmesg);
-			}
-		}
-	}
-
-	free(logmesg);
-
-}
-
-
 
 /* read datagram from connectionless socket, run that command and write it
  * back to the sender we never return, as we never know when the datagram client is done.
@@ -95,18 +36,15 @@ void dg_echo(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen)
 void dg_cmd(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen, char ** clients, int * nclients)
 {
 
-	int i, j, n;
+	int j, n;
 	struct timeval tim;
 	socklen_t clilen;
 	char * mesg = calloc(MAXMESG, sizeof(char));
-	char * nlines = calloc(10, sizeof(char));
 	struct runcmd_t cmd;
 	cmd.numlines = 0;
-	char dst[MAXLINE]; // why is this needed?? else get dg_cmd: sendto error
-	char * buff = malloc(MAXMESG * sizeof(char));
+	char * buff = calloc(MAXMESG, sizeof(char));
 	double t_start;
-	char * logmesg;
-	logmesg = calloc(MAXLOGMESG, sizeof(char));
+	char * logmesg = calloc(MAXLOGMESG, sizeof(char));
 	realtime = 0;
 
 	for ( ; ; ) {
@@ -157,21 +95,17 @@ void dg_cmd(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen, char **
 		runCmd(&cmd);
 		n = cmd.numlines;
 
-		// done with command, now send results back
-		// command setup and run
 		// send back in pieces that are MAXMESG long until it is all sent back.
-
 		if (verbose > 2) sprintf(logmesg, "\nsocket %d: lines: %d\n", sockfd, n);
 
-		// set nlines - not like perl... setting a zero-padded character string
-		sprintf(nlines, "%8d\n", n);
 
-		// first thing sent is the line count
-		nlines[9] = 0; // null terminate because
-
-		if (udp_send_mesg(sockfd, pcli_addr, maxclilen, cmd.out, n) < n) {
-			fprintf(stderr, "%s: sendto error:\n%s", __func__, nlines);
+		if (udp_send_mesg(sockfd, pcli_addr, maxclilen, cmd.out, n) == n) {
+			sprintf(logmesg, "%s: SENT udp_send_mesg %d lines", __func__, n);
 		}
+		else {
+			sprintf(logmesg, "%s: ERROR udp_send_mesg %d lines", __func__, n);
+		}
+		log2stderr(logmesg);
 
 		// note end of command
 		chomp(cmd.command, MAXLINE);
@@ -182,13 +116,9 @@ void dg_cmd(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen, char **
 		);
 		log2stderr(logmesg);
 
-		// reset output else will get re-used (read: appended)
-		for (i = 0; i < n; i++) {
-			free(cmd.out[i]);
-		}
-
 	}
-	free(logmesg);
+	if (logmesg != NULL)
+		free(logmesg);
 
 }
 
@@ -199,14 +129,14 @@ void dg_cmd(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen, char **
 void printClients(char ** clients, int * nclients)
 {
 	int i;
-	char * logmesg;
-	logmesg = calloc(MAXLOGMESG, sizeof(char));
+	char * logmesg = calloc(MAXLOGMESG, sizeof(char));
 	for(i=0; i < *nclients; i++) {
 		// if use printf, will get select error on client side
 		sprintf(logmesg, "Client %d/%d: %s\n", i + 1, *nclients, clients[i]);
 		log2stderr(logmesg);
 	}
-	free(logmesg);
+	if (logmesg != NULL)
+		free(logmesg);
 }
 
 
@@ -227,8 +157,8 @@ int registerClient(struct sockaddr *client_addr, char ** clients, int * nclients
 	char * logmesg;
 	logmesg = calloc(MAXLOGMESG, sizeof(char));
 
-	port = malloc(sizeof(char[10]));
-	dst = malloc(sizeof(char[1])); // init to something..
+	port = calloc(10, sizeof(char));
+	dst = calloc(1, sizeof(char)); // init to something..
 	client = calloc(22, sizeof(char));
 	sprintf(port, "%d", ((struct sockaddr_in *)client_addr)->sin_port);
 	if (verbose) sprintf(logmesg, "%s ip:port = %s:%s\n", __func__, ip, port);
@@ -248,7 +178,7 @@ int registerClient(struct sockaddr *client_addr, char ** clients, int * nclients
 		if (verbose >= 2) fprintf(stderr, "%s: client %s already connected\n", __func__, client);
 	}
 	else {
-		clients[*nclients] = malloc(sizeof(char[100]));
+		clients[*nclients] = calloc(100, sizeof(char));
 		if ( ( memcpy(clients[*nclients], client, sizeof(char[22]))) != NULL) {
 			++*nclients;
 			if (verbose >= 2){
@@ -301,7 +231,7 @@ void dg_cli(FILE *fp, int sockfd, struct sockaddr *pserv_addr, socklen_t servlen
 	char * logmesg;
 	logmesg = calloc(MAXLOGMESG, sizeof(char));
 
-	while (1) {
+	for(; ;) {
 
 		line = 0;
 		nlines = 0;
@@ -333,7 +263,7 @@ void dg_cli(FILE *fp, int sockfd, struct sockaddr *pserv_addr, socklen_t servlen
 
 			/* now read a message from the socket and write it to our standard output */
 
-			// printf("sockfd %d\n", sockfd);
+			 printf("sockfd %d\n", sockfd);
 			while ( (select(maxfd, &fdvar, NULL, NULL, &timeout)) )
 			{
 				
@@ -370,9 +300,70 @@ void dg_cli(FILE *fp, int sockfd, struct sockaddr *pserv_addr, socklen_t servlen
 
 	} // end for ;;
 
+	free(logmesg);
 }
+
+
+
+/* read datagram form connectionless socket and write it back to the sender.
+ * we never return, as we never know when the datagram client is done.
+ * server side
+ */
+
+
+void dg_echo(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen)
+{
+
+	int n;
+	socklen_t clilen;
+	char mesg[MAXMESG];
+
+	char * logmesg = calloc(MAXLOGMESG, sizeof(char));
+
+	for ( ; ; ) {
+
+		clilen = maxclilen;
+
+		// empty out
+		memset(&mesg, 0, sizeof mesg);
+
+		n = recvfrom(sockfd, mesg, MAXMESG, 0, pcli_addr, &clilen);
+
+		// recv packet
+		if (n < 0) {
+			sprintf(logmesg, "%s: recvfrom error\n", __func__);
+			log2stderr(logmesg);
+		}
+		else {
+			if (verbose) {
+				sprintf(logmesg, "START %s: %s:%u recv %lu bytes\n", __func__,
+					inet_ntoa(((struct sockaddr_in *)pcli_addr)->sin_addr),
+					((struct sockaddr_in *)pcli_addr)->sin_port, strlen(mesg));
+				log2stderr(logmesg);
+			}
+		}
+
+		// send packet
+		if (sendto(sockfd, mesg, n, 0, pcli_addr, clilen) != n) {
+			sprintf(logmesg, "%s: sendto error\n", __func__);
+			log2stderr(logmesg);
+		}
+		else {
+			if (verbose) {
+				sprintf(logmesg, "%s: send to %s:%u - %lu bytes\n", __func__,
+					inet_ntoa(((struct sockaddr_in *)pcli_addr)->sin_addr),
+					((struct sockaddr_in *)pcli_addr)->sin_port, strlen(mesg));
+				log2stderr(logmesg);
+			}
+		}
+	}
+
+	if (logmesg != NULL)
+		free(logmesg);
+
+}
+
 
 // # vim: set nu ai ts=4
 
 #endif /* end _UNP_INET_H */
-

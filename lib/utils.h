@@ -178,8 +178,7 @@ int runCmd(struct runcmd_t *cmd)
 	//int j = 0;
 	int rc = 0;
 	struct infile_t output = { .numlines = 0 };
-	char * logmesg;
-	logmesg = calloc(MAXLOGMESG, sizeof(char));
+	char * logmesg = calloc(MAXLOGMESG, sizeof(char));
 
 	// c99 introduced this
 	if (cmd->verbose > 0) {
@@ -189,7 +188,6 @@ int runCmd(struct runcmd_t *cmd)
 	if (strlen(cmd->command) < 1) {
 		sprintf(logmesg, "%s passed zero-length command\n", __func__);
 		log2stderr(logmesg);
-		free(logmesg);
 		return 1;
 	}
 
@@ -206,11 +204,11 @@ int runCmd(struct runcmd_t *cmd)
 	}
 	rc = getStream(&output, in);
 
+	cmd->out = (char **)calloc(MAXLINES, sizeof(char[MAXLINE]));
 	// copy the results into our struct
-	cmd->out = (char ** )malloc(output.numlines * sizeof(char[MAXLINE]));
 	for (i = 0; i < output.numlines; i++) {
 		if (verbose >= 2) {
-			fprintf(stderr, "line %d: %s\n", i, output.lines[i]);
+			fprintf(stderr, "--> line %d: %s", i, output.lines[i]);
 		}
 		cmd->out[i] = output.lines[i]; 
 		// , sizeof(char[MAXLINE]));
@@ -219,7 +217,7 @@ int runCmd(struct runcmd_t *cmd)
 
 	cmd->numlines = output.numlines;
 	cmd->numchars = output.numchars;
-	achomp(cmd->out, output.numlines);
+	// achomp(cmd->out, output.numlines); // needed else recv does not delimit well
 
 	// store exit code
 	cmd->rc = pclose(in);
@@ -245,7 +243,8 @@ int runCmd(struct runcmd_t *cmd)
 		log2stderr(logmesg);
 	}
 
-	free(logmesg);
+	if (logmesg != NULL)
+		free(logmesg);
 
 	return cmd->rc;
 
@@ -259,14 +258,28 @@ int udp_send_mesg(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen, c
 	int i = 0;
 	struct timeval tim;
 	double t_end;
+	size_t lines = 10;
 	char * logmesg;
 	logmesg = calloc(MAXLOGMESG, sizeof(char));
+	char * nlines = calloc(10, sizeof(char));
 
+	// set nlines - not like perl... setting a zero-padded character string
+	sprintf(nlines, "%08d\n", n);
+
+	// first thing sent is the line count
+	nlines[9] = 0; // null terminate because
 	sprintf(logmesg, "%s: send %d lines\n", __func__, n);
+	log2stderr(logmesg);
+
+	if (sendto(sockfd, nlines, lines, 0, pcli_addr, maxclilen) < strlen(nlines)) {
+		sprintf(logmesg, "%s: sendto error:\n%s", __func__, nlines);
+		log2stderr(logmesg);
+	}
 
 	// send the lines
 	for (i = 0; i < n; i++) {
 
+		strcat(mesg[i], "\n");
 		if (sendto(sockfd, mesg[i], strlen(mesg[i]), 0, pcli_addr, maxclilen) < strlen(mesg[i])) {
 			sprintf(logmesg, "%s: sendto error:\n%s", __func__, mesg[i]);
 		}
@@ -336,7 +349,7 @@ int split(char ** dst, char * line, int size, char * splitchar)
 	splitchar[1] = 0;
 
 	// initialize first buffer before entering loop
-	buff = (char*)malloc(300*sizeof(char));
+	buff = (char*)calloc(300, sizeof(char));
 	dst[n] = buff;
 	memset(buff, 0, MAXLINE);
 
@@ -356,7 +369,7 @@ int split(char ** dst, char * line, int size, char * splitchar)
 			dst[n] = buff;
 			n++;
 			j=0;
-			buff = (char*)malloc(300*sizeof(char));
+			buff = (char*)calloc(300, sizeof(char));
 			dst[n] = buff;
 			memset(buff, 0, MAXLINE);
 
@@ -364,7 +377,8 @@ int split(char ** dst, char * line, int size, char * splitchar)
 		}
 	}
 
-	free(buff);
+	if (buff != NULL)
+		free(buff);
 
 	// incremented (n) but buffer has no results, drop it...
 	// would happen if split char was last chars on a line
