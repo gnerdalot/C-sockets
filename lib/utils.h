@@ -45,6 +45,7 @@ void die(const char *msg);
 void log2stderr(char *mesg);
 int runCmd(struct runcmd_t *cmd);
 int getStream(struct infile_t *infile, FILE * stream);
+int udp_send_mesg(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen, char * mesg, int n);
 int getFile(struct infile_t * dst, char * filename);
 int chomp(char * array, int size);
 int achomp(char ** array, int size);
@@ -69,15 +70,15 @@ void die(const char *msg)
 void log2stderr(char * mesg)
 {
 	struct timeval tim;
-	double t_start;
+	double t_epoch;
 
 	// overflow protection
 	mesg[MAXLOGMESG - 1] = 0;
 
 	gettimeofday(&tim, NULL); // time_t tv_sec, suseconds_t tv_usec
-	t_start  = tim.tv_sec + tim.tv_usec/1000000.0;
+	t_epoch  = tim.tv_sec + tim.tv_usec/1000000.0;
 
-	fprintf(stderr, "%.4f %s", t_start, mesg);
+	fprintf(stderr, "%.4f %s", t_epoch, mesg);
 
 	// reset
 	mesg[0] = 0;
@@ -178,7 +179,7 @@ int runCmd(struct runcmd_t *cmd)
 	int rc = 0;
 	struct infile_t output = { .numlines = 0 };
 	char * logmesg;
-	logmesg = calloc(1, sizeof(char[MAXLOGMESG]));
+	logmesg = calloc(MAXLOGMESG, sizeof(char));
 
 	// init - causes segfault with runcmd
 	/*
@@ -254,6 +255,44 @@ int runCmd(struct runcmd_t *cmd)
 	return cmd->rc;
 
 }
+
+
+// Send a message via udp to one dest
+int udp_send_mesg(int sockfd, struct sockaddr *pcli_addr, socklen_t maxclilen, char * mesg, int n)
+
+{
+	int i = 0;
+	struct timeval tim;
+	double t_end;
+	char * logmesg;
+	logmesg = calloc(MAXLOGMESG, sizeof(char));
+
+	// send the lines
+	for (i = 0; i < n; i++) {
+
+		if (sendto(sockfd, mesg, strlen(mesg), 0, pcli_addr, maxclilen) < strlen(mesg)) {
+			sprintf(logmesg, "%s: sendto error:\n%s", __func__, mesg);
+		}
+		else {
+			if (verbose) {
+				gettimeofday(&tim, NULL); // time_t tv_sec, suseconds_t tv_usec
+				t_end  = tim.tv_sec + tim.tv_usec/1000000.0;
+				sprintf(logmesg, "%s: %.6lf: send to %s:%u %lu bytes\n",
+					__func__,
+					t_end,
+					inet_ntoa(((struct sockaddr_in *)pcli_addr)->sin_addr),
+					((struct sockaddr_in *)pcli_addr)->sin_port,
+					strlen(mesg)
+				);
+				log2stderr(logmesg);
+			}
+		}
+	}
+	// return lines sent
+	return i;
+
+}
+
 
 // split line on index, return array of arrays
 int spliti(char ** dst, char * line, int size, int index)
