@@ -1,4 +1,3 @@
-reference/
 *.swp
 bin/
-../bin
+serial/
