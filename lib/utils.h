@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/time.h>   // needed for Linux 
 
 #define SOMELINES 512 
 #define MAXLINE  2048 

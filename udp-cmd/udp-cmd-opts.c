@@ -56,6 +56,7 @@ void do_opts (int argc, char *argv[], char ** environ)
 		{ "dryrun",          no_argument,       NULL, 'y' },
 		{ "match",           required_argument, NULL, 'm' },
 		{ "message",         required_argument, NULL, 'M' },
+		{ "help",            no_argument,       NULL, 'M' },
 		{  NULL,             0,                 NULL,  0  },
 	};
 
@@ -86,6 +87,11 @@ void do_opts (int argc, char *argv[], char ** environ)
 			case 's':
 				//printf("choice s %d - %s\n", opt, optarg);
 				globalArgs.serverip = optarg;
+				break;
+
+			case 'h':
+				//printf("choice s %d - %s\n", opt, optarg);
+	            usage(argv[0], 0);
 				break;
 
 			case 'm':
